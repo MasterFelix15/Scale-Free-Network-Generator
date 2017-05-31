@@ -3,10 +3,11 @@ from numpy import linalg as la
 import math
 import random
 import matplotlib.pyplot as plt
+import plotter
 
 
 # analyze a given graph, return the degree map and distribution histogram
-def analyzeGraph(graph):
+def analyze_graph(graph):
     N = 0
     nodes = []
     for i in range(graph.shape[0]):
@@ -21,24 +22,26 @@ def analyzeGraph(graph):
         distribution[i] /= N
     return nodes, distribution
 
+
 # plot a given graph, in terms of its degree distribution
-def plotThisGraph(graph):
+def plot_this_graph(graph):
     graph = numpy.array(graph)
-    nodes, histogram = analyzeGraph(graph)
+    nodes, histogram = analyze_graph(graph)
     plt.plot(histogram, 'ro')
-    plt.ylim(0, 0.1)
     plt.show()
 
+
 # find all node indexes of a given degree from a given list of nodes
-def findPointsOfDegree(nodes, degree):
+def find_points_of_degree(nodes, degree):
     pointList = []
     for i in range(len(nodes)):
         if nodes[i] == degree:
             pointList.append(i)
     return pointList
 
+
 # generate a BA graph
-def BAGenerator(n0, m, N):
+def ba_generator(n0, m, N):
     degree = numpy.zeros((N, 1))
     mark = numpy.zeros((N, 1))
     num = numpy.zeros((N, 1))
@@ -75,7 +78,7 @@ def BAGenerator(n0, m, N):
     return A
 
 
-def RandomGraphGenerator(N):
+def random_graph_generator(N):
     graph = numpy.zeros((N, N))
     for i in range(N):
         for j in range(N):
@@ -88,162 +91,178 @@ def RandomGraphGenerator(N):
     return graph
 
 
-def removeDuplicates(degreeList):
+def remove_duplicates(degreeList):
     listNoDuplicates = []
     for i in range(len(degreeList)):
         if not(degreeList[i] in listNoDuplicates):
             listNoDuplicates.append(degreeList[i])
     return listNoDuplicates
 
-def kevinAlgo(graph, gamma, cycle):
-    addCount = 0
-    delCount = 0
-    movCount = 0
-    QCount = 1
-    zeta = 0
-    for index in range(1, 10000):
-        zeta += math.pow(index, -1 * gamma)
-    A = numpy.matrix(graph, dtype=int)
-    Qpast = 2
-    invalidResultCount = 0
-    loopCount = 0
+
+def get_relink_candidates(node_i, node_j, graph):
+    relink_candidates = []
+    for index in range(graph.shape[0]):
+        if graph[node_i, index] == 1 and graph[node_j, index] == 0:
+            relink_candidates.append(index)
+    return relink_candidates
+
+
+def generate_true_scale_free_network(graph, gamma, cycle):
+
+    # monitoring variables initialization
+    cycle_count = 0
+    invalid_cycle_count = 0
+    add_count = 0
+    del_count = 0
+    mov_count = 0
+
+    # step 1: Get graph
+    graph = numpy.matrix(graph, dtype=int)
+    number_of_nodes = graph.shape[0]
+
     while True:
-        if invalidResultCount > 100:
+        cycle_count += 1
+        if cycle_count > cycle or invalid_cycle_count > 50:
             break
-        if loopCount > cycle:
-            break
-        invalidResultCount += 1
-        loopCount += 1
-        foundValidChange = False
-        validChangeType = -1
-        nodes, distribution = analyzeGraph(A)
-        d = min(nodes)
-        N = A.shape[0]
-        # generate CP
-        CP = numpy.eye(N, dtype=int)
-        for power in range(2, N):
-            CP += la.matrix_power(A, power)
 
-        k = random.choice(nodes)
-        NDnodes = removeDuplicates(nodes)
-        for x in range(len(NDnodes)):
-            if foundValidChange:
-                break
-            l = NDnodes[x]
-            klist = findPointsOfDegree(nodes, k)
-            kp1list = findPointsOfDegree(nodes, k + 1)
-            km1list = findPointsOfDegree(nodes, k - 1)
-            llist = findPointsOfDegree(nodes, l)
-            lp1list = findPointsOfDegree(nodes, l + 1)
-            lm1list = findPointsOfDegree(nodes, l - 1)
+        # step 1.1: Calculate CP for this graph
+        cp = numpy.eye(number_of_nodes, dtype=int)
+        for power in range(2, number_of_nodes):
+            cp += la.matrix_power(graph, power)
 
-            nk = len(klist)
-            nkp1 = len(kp1list)
-            nkm1 = len(km1list)
-            nl = len(llist)
-            nlp1 = len(lp1list)
-            nlm1 = len(lm1list)
+        # step 2: Compute the node-degree histogram n(G)
+        ng, pg = analyze_graph(graph)
 
-            pk = math.pow(k - d + 1, -1 * gamma) / zeta
-            pkp1 = math.pow(k - d + 2, -1 * gamma) / zeta
+        # step 2.1 Compute the degree-node histogram n with n(G)
+        n = []
+        for index in range(2 * number_of_nodes):
+            n.append(0)
+        for index in range(len(ng)):
+            n[ng[index]] += 1
+
+        # step 2.2 Compute p for all nodes
+        zeta = 0
+        for index in range(1, 10000):
+            zeta += math.pow(index, -1 * gamma)
+        p = []
+        for index in range(2 * number_of_nodes):
             try:
-                pkm1 = math.pow(k - d, -1 * gamma) / zeta
+                p.append(math.pow(index - min(ng) + 1, -1 * gamma) / zeta)
             except ValueError:
-                pkm1 = 0
-            pl = math.pow(l - d + 1, -1 * gamma) / zeta
-            plp1 = math.pow(l - d + 2, -1 * gamma) / zeta
-            try:
-                plm1 = math.pow(l - d, -1 * gamma) / zeta
-            except ValueError:
-                plm1 = 0
-            i = random.choice(klist)
-            for y in range(len(llist)):
-                if foundValidChange:
-                    break
-                j = llist[y]
-                if A[i, j] == 0:  # not connected, add edge
-                    validChangeType = 0
-                    if abs(k - l) > 1:
-                        Q = nk * nl * pkp1 * plp1 / (pk * pl * (nkp1 + 1) * (nlp1 + 1))
-                    elif k + 1 == l:
-                        Q = nk * plp1 / (pk * (nlp1 + 1))
-                    elif k == l + 1:
-                        Q = nl * pkp1 / (pl * (nkp1 + 1))
-                    elif k == l and nk >= 2:
-                        Q = nk * (nk - 1) * math.pow(pkp1, 2) / (math.pow(pk, 2) * (nkp1 + 2) * (nkp1 + 1))
-                elif A[i, j] == 1 and CP[i, j] > 0:  # connected, remove edge
-                    validChangeType = 1
-                    if abs(k - l) > 1:
-                        Q = nk * nl * pkm1 * plm1 / (pk * pl * (nkm1 + 1) * (nlm1 + 1))
-                    elif k - 1 == l:
-                        Q = nk * plm1 / (pk * (nlm1 + 1))
-                    elif k == l - 1:
-                        Q = nl * pkm1 / (pl * (nkm1 + 1))
-                    elif k == l and nk >= 2:
-                        Q = nk * (nk - 1) * math.pow(pkm1, 2) / math.pow(pk, 2) * (nkm1 + 2) * (nkm1 + 1)
-                else:
-                    for m in range(1, nk):
-                        validChangeType = m
-                        aiT = A[i].transpose()
-                        aj = A[j]
-                        leftSide = numpy.dot(aiT, aj)[0, 0] - A[i, j]
-                        rightSide = nk - m
-                        if leftSide <= rightSide:
-                            nkpm = len(findPointsOfDegree(nodes, k + m))
-                            nkmm = len(findPointsOfDegree(nodes, k - m))
-                            nlpm = len(findPointsOfDegree(nodes, l + m))
+                p.append(0)
 
-                            pkpm = math.pow(k - d + m + 1, -1 * gamma) / zeta
-                            try:
-                                pkmm = math.pow(k - d - m + 1, -1 * gamma) / zeta
-                            except ValueError:
-                                pkmm = 0
-                            plpm = math.pow(l - d + m + 1, -1 * gamma) / zeta
-                            if k - l != 0 and k - l != m and k - l != 2 * m:
-                                Q = nk * pkmm * nl * plpm / (pk * (nkmm + 1) * pl * (nlpm + 1))
-                            elif k == l and nk >= 2:
-                                Q = nk * (nk - 1) * pkmm * pkpm / (math.pow(pk, 2) * (nkmm + 1) * (nkpm + 1))
-                            elif k == l + m:
-                                Q = 1
-                            elif k - m == l + m:
-                                Q = nk * nl * math.pow(pkmm, 2) / (pk * pl * (nkmm + 1) * (nkmm + 2))
-                if Q and Q > 0 and 0 < math.log(Q) < Qpast:
-                    print("a valid first change:" + str([i, j]) + str(Qpast) + "::" + str(validChangeType))
-                    QCount += 1
-                    Qpast = (Qpast * (QCount-1) + math.log(Q)) / QCount
-                    foundValidChange = True
-                    invalidResultCount = 0
-                    if validChangeType == 0:
-                        A[i, j] = 1
-                        A[j, i] = 1
-                        addCount += 1
-                    elif validChangeType == 1:
-                        A[i, j] = 0
-                        A[j, i] = 0
-                        delCount += 1
-                    elif validChangeType > 1:  # rewire m connections with node i to node j
-                        random.shuffle(klist)
-                        for index in range(validChangeType):
-                            g = klist[index]
-                            A[g, i] = 0
-                            A[i, g] = 0
-                            A[j, g] = 1
-                            A[g, j] = 1
-                            movCount += 1
-    plotThisGraph(A)
-    print("Gamma Value: " + str(gamma))
-    print("Add Operation Count: " + str(addCount))
-    print("Delete Operation Count: " + str(delCount))
-    print("Gift Operation Count: " + str(movCount))
-    print("Total Operation Count: " + str(addCount + delCount + movCount))
+        # step 3: Choose a degree k such that n[k] > 0
+        k = random.choice(ng)
+        k_list = find_points_of_degree(ng, k)
+
+        # step 4: Find best Q from all possible changes made with this given k with all l and m
+        best_q = 0
+        best_solution = 'undefined'
+        no_duplicate_ng = remove_duplicates(ng)
+        for l_index in range(len(no_duplicate_ng)):
+            l = no_duplicate_ng[l_index]
+            l_list = find_points_of_degree(ng, l)
+            for i_index in range(len(k_list)):
+                i = k_list[i_index]
+                for j_index in range(len(l_list)):
+                    j = l_list[j_index]
+                    q = 0
+                    m = -2
+                    if graph[i, j] == 0:  # not connected, add edge
+                        m = -1
+                        if abs(k - l) > 1:
+                            q = n[k] * n[l] * p[k + 1] * p[l + 1] / (p[k] * p[l] * (n[k + 1] + 1) * (n[l + 1] + 1))
+                        elif k + 1 == l:
+                            q = n[k] * p[l + 1] / (p[k] * (n[l + 1] + 1))
+                        elif k == l + 1:
+                            q = n[l] * p[k + 1] / (p[l] * (n[k + 1] + 1))
+                        elif k == l and n[k] >= 2:
+                            q = n[k] * (n[k] - 1) * math.pow(p[k + 1], 2) / (
+                            math.pow(p[k], 2) * (n[k + 1] + 2) * (n[k + 1] + 1))
+                    elif graph[i, j] == 1 and cp[i, j] > 0:  # connected, remove edge
+                        m = 0
+                        if abs(k - l) > 1:
+                            q = n[k] * n[l] * p[k - 1] * p[l - 1] / (p[k] * p[l] * (n[k - 1] + 1) * (n[l - 1] + 1))
+                        elif k - 1 == l:
+                            q = n[k] * p[l - 1] / (p[k] * (n[l - 1] + 1))
+                        elif k == l - 1:
+                            q = n[l] * p[k - 1] / (p[l] * (n[k - 1] + 1))
+                        elif k == l and n[k] >= 2:
+                            q = n[k] * (n[k] - 1) * math.pow(p[k - 1], 2) / math.pow(p[k], 2) * (n[k - 1] + 2) * (n[k - 1] + 1)
+                    else:
+                        for m in range(1, n[k]):
+                            ai_t = graph[i].transpose()
+                            aj = graph[j]
+                            left_side = numpy.dot(ai_t, aj)[0, 0] - graph[i, j]
+                            right_side = n[k] - m
+                            if left_side <= right_side:
+                                if k - l != 0 and k - l != m and k - l != 2 * m:
+                                    q = n[k] * p[k - m] * n[l] * p[l + m] / (
+                                    p[k] * (n[k - m] + 1) * p[l] * (n[l + m] + 1))
+                                elif k == l and n[k] >= 2:
+                                    q = n[k] * (n[k] - 1) * p[k - m] * p[k + m] / (
+                                    math.pow(p[k], 2) * (n[k - m] + 1) * (n[k + m] + 1))
+                                elif k == l + m:
+                                    q = 1
+                                elif k - m == l + m:
+                                    q = n[k] * n[l] * math.pow(p[k - m], 2) / (
+                                    p[k] * p[l] * (n[k - m] + 1) * (n[k - m] + 2))
+                    if q > 0 and math.log(q) > best_q:
+                        best_q = math.log(q)
+                        print("best log(q) value has been updated to " + str(math.log(q)))
+                        best_solution = [i, j, m]
+
+        # step 5: Make the valid change to G and return to step 2
+        if best_solution != 'undefined':
+            i, j, m = best_solution
+            if m == -1:
+                print("connect node " + str(i) + " to node " + str(j))
+                add_count += 1
+                graph[i, j] = 1
+                graph[j, i] = 1
+            elif m == 0:
+                print("disconnect node " + str(i) + " to node " + str(j))
+                del_count += 1
+                graph[i, j] = 0
+                graph[j, i] = 0
+            elif m >= 1:
+                relink_candidates = get_relink_candidates(i, j, graph)
+                random.shuffle(relink_candidates)
+                gift_count = 0
+                while gift_count < m:
+                    try:
+                        g = relink_candidates[gift_count]
+                        if cp[i, g] == 0:  # test whether removing node g from node i will result in disconnected graphs
+                            print("gifting node " + str(g) + " from node " + str(i) +
+                                  "will result in disconnected graph, abort")
+                        else:
+                            print("gift node " + str(g) + " from node " + str(i))
+                            mov_count += 1
+                            graph[g, i] = 0
+                            graph[i, g] = 0
+                            graph[j, g] = 1
+                            graph[g, j] = 1
+                            gift_count += 1
+                    except IndexError:
+                        print("fail to gift nodes")
+                        break
+            invalid_cycle_count = 0
+        else:
+            print('fail to find a valid change in this cycle with k as: ' + str(k))
+            invalid_cycle_count += 1
+    print("Total Add Operations: " + str(add_count))
+    print("Total Remove Operations: " + str(del_count))
+    print("Total gift Operations: " + str(mov_count))
+    return graph
 
 
-def runThisProgram(n0, m, N, gamma, cycle):
-    graph = BAGenerator(n0, m, N)
-    plotThisGraph(graph)
-    kevinAlgo(graph, gamma, cycle)
+def run_this_program(n0, m, N, gamma, cycle):
+    graph = ba_generator(n0, m, N)
+    plot_this_graph(graph)
+    plotter.draw_graph(graph)
+    graph = generate_true_scale_free_network(graph, gamma, cycle)
+    plot_this_graph(graph)
+    plotter.draw_graph(graph)
 
 
-runThisProgram(4, 3, 50, 2.5, 1000)
-
-
+run_this_program(5, 5, 100, 2.5, 50)
