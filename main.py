@@ -4,6 +4,7 @@ import math
 import random
 import matplotlib.pyplot as plt
 import plotter
+import threading
 
 
 # analyze a given graph, return the degree map and distribution histogram
@@ -256,13 +257,25 @@ def generate_true_scale_free_network(graph, gamma, cycle):
     return graph
 
 
+def record_graph(name, graph):
+    f = open(name + '.graph', 'w')
+    for i in range(graph.shape[0]):
+        for j in range(graph.shape[1]):
+            if j == graph.shape[1] - 1:
+                f.write(str(int(graph[i, j])) + '\n')
+            else:
+                f.write(str(int(graph[i, j])) + ' ')
+    f.close()
+
+
 def run_this_program(n0, m, N, gamma, cycle):
     graph = ba_generator(n0, m, N)
+    graph = numpy.matrix(graph)
+    record_graph('initial', graph)
     plot_this_graph(graph)
-    plotter.draw_graph(graph)
     graph = generate_true_scale_free_network(graph, gamma, cycle)
     plot_this_graph(graph)
-    plotter.draw_graph(graph)
+    record_graph('optimized', graph)
 
 
-run_this_program(5, 5, 100, 2.5, 50)
+run_this_program(5, 5, 100, 2.5, 200)
